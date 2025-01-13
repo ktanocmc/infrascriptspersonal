@@ -16,12 +16,13 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Run PowerShell Script
-        shell: powershell
-        run: |
-          param (
-              [string]$officelocation = "${{ github.event.inputs.officelocation }}",
-              [string]$username = "${{ github.event.inputs.username }}"
-          )
+        run: |          
+          $officelocation = "${{ github.event.inputs.officelocation }}"
+          $username = "${{ github.event.inputs.username }}"
 
-          # Pass parameters to the script
+          # Debug: Output parameters
+          Write-Host "Office Location: $officelocation"
+          Write-Host "Username: $username"
+
+          # Run the target PowerShell script with parameters
           & "D:\Udrivedelete\Udrivedelete.ps1" -officelocation $officelocation -username $username
