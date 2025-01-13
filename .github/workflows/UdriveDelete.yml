@@ -1,0 +1,98 @@
+# Initializing parameters
+param (
+    [string]$officelocation,
+    [string]$username
+) 
+
+# Construct the U: Drive path dynamically
+$uDrivePath = "U:\$officelocation\$username"
+
+# Function to change owner to administrator using Takeown
+function Take-Ownership {
+    param (
+        [string]$Path
+    )
+    try {
+        # Take ownership of the specified path recursively
+        Write-Host "Taking ownership of: $Path" -ForegroundColor Cyan
+        & takeown.exe /f $Path /r /d y | Out-Null
+        Write-Host "Ownership successfully changed for: $Path" -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to take ownership of $Path: $_" -ForegroundColor Red
+        throw
+    }
+}
+
+# Function to set full control permissions for administrators using Icacls
+function Set-FullControl {
+    param (
+        [string]$Path
+    )
+    try {
+        # Grant full control to administrators recursively
+        Write-Host "Setting full control permissions on: $Path" -ForegroundColor Cyan
+        & icacls.exe $Path /grant Administrators:F /t /c | Out-Null
+        Write-Host "Permissions successfully updated for: $Path" -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to set permissions on $Path: $_" -ForegroundColor Red
+        throw
+    }
+}
+
+# Function to delete folder contents and the folder itself
+function Clear-FolderAndDelete {
+    param (
+        [string]$Path
+    )
+    try {
+        Write-Host "Clearing folder contents for: $Path" -ForegroundColor Cyan
+        Get-ChildItem -Path $Path -Recurse -Force | ForEach-Object {
+            try {
+                Remove-Item -Path $_.FullName -Recurse -Force
+            } catch {
+                Write-Host "Failed to delete $($_.FullName): $_" -ForegroundColor Yellow
+                # Attempt to reset ownership and permissions again
+                try {
+                    Take-Ownership -Path $_.FullName
+                    Set-FullControl -Path $_.FullName
+                    Remove-Item -Path $_.FullName -Recurse -Force
+                } catch {
+                    Write-Host "Retry failed for $($_.FullName): $_" -ForegroundColor Red
+                }
+            }
+        }
+        
+        # Finally, delete the folder itself
+        Write-Host "Deleting folder: $Path" -ForegroundColor Cyan
+        Remove-Item -Path $Path -Recurse -Force
+        Write-Host "Folder successfully deleted: $Path" -ForegroundColor Green
+    } catch {
+        Write-Host "An error occurred while deleting folder: $Path - $_" -ForegroundColor Red
+        throw
+    }
+}
+
+# Main script execution
+try {
+    # Verify the path exists
+    if (-Not (Test-Path -Path $uDrivePath)) {
+        Write-Host "The specified folder location does not exist: $uDrivePath" -ForegroundColor Red
+        exit 1
+    }
+
+    # Take ownership and set permissions recursively
+    Write-Host "Changing owner and permissions for: $uDrivePath" -ForegroundColor Cyan
+    Take-Ownership -Path $uDrivePath
+    Set-FullControl -Path $uDrivePath
+
+    # Delete the contents of the folder and the folder itself
+    Write-Host "Deleting contents of the folder and the folder itself..." -ForegroundColor Cyan
+    Clear-FolderAndDelete -Path $uDrivePath
+
+    # Confirm deletion
+    Write-Host "The U drive folder has been successfully deleted: $uDrivePath" -ForegroundColor Green
+} catch {
+    Write-Host "An error occurred during execution: $_" -ForegroundColor Red
+    exit 1
+}
+
