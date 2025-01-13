@@ -1,0 +1,27 @@
+name: Delete U Folder
+on:
+  workflow_dispatch:
+    inputs:
+      officelocation:
+        description: 'Enter office location'
+        required: true
+        type: string
+      username:
+        description: 'Enter the username'
+        required: true
+        type: string
+
+jobs:
+  delete_folder:
+    runs-on: self-hosted
+    steps:
+      - name: Run PowerShell Script
+        shell: pwsh
+        run: |
+          param (
+              [string]$officelocation = "${{ github.event.inputs.officelocation }}",
+              [string]$username = "${{ github.event.inputs.username }}"
+          )
+
+          # Pass parameters to the script
+          & "D:\Udrivedelete\Udrivedelete.ps1" -officelocation $officelocation -username $username
