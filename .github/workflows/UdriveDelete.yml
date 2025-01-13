@@ -1,98 +1,48 @@
-# Initializing parameters
-param (
-    [string]$officelocation,
-    [string]$username
-) 
+name: Delete Users U Drive
+run-name: ${{ github.actor }} is actioning ${{ github.event.inputs.ticketID }}
 
-# Construct the U: Drive path dynamically
-$uDrivePath = "U:\$officelocation\$username"
+on:
+  workflow_dispatch:
+    inputs:
+      officelocation:
+        description: 'Please enter office location'
+        required: true
+        type: string
+      username:
+        description: 'Please enter the first initial and last name of the user whose U: drive should be deleted'
+        required: true
+        type: string
+      ticketID:
+        description: 'Please enter the Jira ticket number'
+        required: true
+        type: string
 
-# Function to change owner to administrator using Takeown
-function Take-Ownership {
-    param (
-        [string]$Path
-    )
-    try {
-        # Take ownership of the specified path recursively
-        Write-Host "Taking ownership of: $Path" -ForegroundColor Cyan
-        & takeown.exe /f $Path /r /d y | Out-Null
-        Write-Host "Ownership successfully changed for: $Path" -ForegroundColor Green
-    } catch {
-        Write-Host "Failed to take ownership of $Path: $_" -ForegroundColor Red
-        throw
-    }
-}
+jobs:
+  delete_folder:
+    runs-on: self-hosted
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
 
-# Function to set full control permissions for administrators using Icacls
-function Set-FullControl {
-    param (
-        [string]$Path
-    )
-    try {
-        # Grant full control to administrators recursively
-        Write-Host "Setting full control permissions on: $Path" -ForegroundColor Cyan
-        & icacls.exe $Path /grant Administrators:F /t /c | Out-Null
-        Write-Host "Permissions successfully updated for: $Path" -ForegroundColor Green
-    } catch {
-        Write-Host "Failed to set permissions on $Path: $_" -ForegroundColor Red
-        throw
-    }
-}
+      - name: Run PowerShell Script Remotely
+        shell: pwsh
+        run: |
+          # Get inputs from GitHub event
+          $officelocation = "${{ github.event.inputs.officelocation }}"
+          $username = "${{ github.event.inputs.username }}"
+          
+          # Execute the remote script on the target server
+          Invoke-Command -ComputerName "psvau4wimg001.cmc.local" -ScriptBlock {
+              param ($officelocation, $username)
+              
+              # Path to the PowerShell script on the remote machine
+              $scriptPath = "C:\Users\adm-clucas\Udrivedelete\Udrivedelete.ps1"
 
-# Function to delete folder contents and the folder itself
-function Clear-FolderAndDelete {
-    param (
-        [string]$Path
-    )
-    try {
-        Write-Host "Clearing folder contents for: $Path" -ForegroundColor Cyan
-        Get-ChildItem -Path $Path -Recurse -Force | ForEach-Object {
-            try {
-                Remove-Item -Path $_.FullName -Recurse -Force
-            } catch {
-                Write-Host "Failed to delete $($_.FullName): $_" -ForegroundColor Yellow
-                # Attempt to reset ownership and permissions again
-                try {
-                    Take-Ownership -Path $_.FullName
-                    Set-FullControl -Path $_.FullName
-                    Remove-Item -Path $_.FullName -Recurse -Force
-                } catch {
-                    Write-Host "Retry failed for $($_.FullName): $_" -ForegroundColor Red
-                }
-            }
-        }
-        
-        # Finally, delete the folder itself
-        Write-Host "Deleting folder: $Path" -ForegroundColor Cyan
-        Remove-Item -Path $Path -Recurse -Force
-        Write-Host "Folder successfully deleted: $Path" -ForegroundColor Green
-    } catch {
-        Write-Host "An error occurred while deleting folder: $Path - $_" -ForegroundColor Red
-        throw
-    }
-}
-
-# Main script execution
-try {
-    # Verify the path exists
-    if (-Not (Test-Path -Path $uDrivePath)) {
-        Write-Host "The specified folder location does not exist: $uDrivePath" -ForegroundColor Red
-        exit 1
-    }
-
-    # Take ownership and set permissions recursively
-    Write-Host "Changing owner and permissions for: $uDrivePath" -ForegroundColor Cyan
-    Take-Ownership -Path $uDrivePath
-    Set-FullControl -Path $uDrivePath
-
-    # Delete the contents of the folder and the folder itself
-    Write-Host "Deleting contents of the folder and the folder itself..." -ForegroundColor Cyan
-    Clear-FolderAndDelete -Path $uDrivePath
-
-    # Confirm deletion
-    Write-Host "The U drive folder has been successfully deleted: $uDrivePath" -ForegroundColor Green
-} catch {
-    Write-Host "An error occurred during execution: $_" -ForegroundColor Red
-    exit 1
-}
-
+              # Check if the script exists
+              if (Test-Path $scriptPath) {
+                  # Execute the script
+                  & $scriptPath -officelocation $officelocation -username $username
+              } else {
+                  Write-Error "Script not found at $scriptPath"
+              }
+          } -ArgumentList $officelocation, $username
